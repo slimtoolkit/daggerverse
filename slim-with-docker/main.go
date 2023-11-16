@@ -7,16 +7,16 @@ import (
 	"strings"
 )
 
-type Slim struct{}
+type SlimWithDocker struct{}
 
-func (s *Slim) Nop(ctx context.Context,
+func (s *SlimWithDocker) Nop(ctx context.Context,
 	name string,
 	doit Optional[bool],
 ) (string, error) {
 	return fmt.Sprintf("nop(name=%s,doit=%v)", name, doit.GetOr(true)), nil
 }
 
-func (s *Slim) Debug(ctx context.Context, container *Container) (*Container, error) {
+func (s *SlimWithDocker) Debug(ctx context.Context, container *Container) (*Container, error) {
 	slimmed, err := s.Slim(ctx,
 		container,
 		OptEmpty[bool](),
@@ -63,7 +63,7 @@ func engineImage() string {
 	}
 }
 
-func (s *Slim) Slim(
+func (s *SlimWithDocker) Slim(
 	ctx context.Context,
 	container *Container,
 	probeHTTP Optional[bool],
