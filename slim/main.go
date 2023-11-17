@@ -7,35 +7,6 @@ import (
 	"strings"
 )
 
-type Slim struct{}
-
-func (s *Slim) Nop(ctx context.Context,
-	name string,
-	doit Optional[bool],
-) (string, error) {
-	return fmt.Sprintf("nop(name=%s,doit=%v)", name, doit.GetOr(true)), nil
-}
-
-func (s *Slim) Debug(ctx context.Context, container *Container) (*Container, error) {
-	slimmed, err := s.Minify(ctx,
-		container,
-		OptEmpty[string](),
-		OptEmpty[bool](),
-		OptEmpty[string](),
-		OptEmpty[bool](),
-		OptEmpty[bool]())
-	if err != nil {
-		return nil, err
-	}
-	
-	debug := dag.
-		Container().
-		From("alpine").
-		WithMountedDirectory("/slim", slimmed.Rootfs()).
-		WithMountedDirectory("/unslim", container.Rootfs())
-	return debug, nil
-}
-
 const (
 	//todo: multi-arch engine image
 	engineImageARM = "index.docker.io/dslim/slim-arm"
@@ -57,16 +28,7 @@ const (
 	modeNative = "native"
 )
 
-func engineImage() string {
-	switch runtime.GOARCH {
-	case archAMD64:
-		return engineImageAMD
-	case archARM64:
-		return engineImageARM
-	default:
-		return "" //let it error :)
-	}
-}
+type Slim struct{}
 
 func (s *Slim) Minify(
 	ctx context.Context,
@@ -83,9 +45,9 @@ func (s *Slim) Minify(
 	paramDebug := slimDebug.GetOr(false)
 
 	switch paramMode {
-		case modeDocker, modeNative:
-		default:
-			paramMode = modeDocker
+	case modeDocker, modeNative:
+	default:
+		paramMode = modeDocker
 	}
 
 	if paramMode != modeDocker {
@@ -155,6 +117,39 @@ func (s *Slim) Minify(
 		"-o", outputImageTar}).
 		File(outputImageTar)
 	return dag.Container().Import(outputArchive), nil
+}
+
+func (s *Slim) Debug(ctx context.Context, container *Container) (*Container, error) {
+	slimmed, err := s.Minify(ctx,
+		container,
+		OptEmpty[string](),
+		OptEmpty[bool](),
+		OptEmpty[string](),
+		OptEmpty[bool](),
+		OptEmpty[bool]())
+	if err != nil {
+		return nil, err
+	}
+
+	debug := dag.
+		Container().
+		From("alpine").
+		WithMountedDirectory("/slim", slimmed.Rootfs()).
+		WithMountedDirectory("/unslim", container.Rootfs())
+	return debug, nil
+}
+
+// SUPPORTING FUNCTIONS:
+
+func engineImage() string {
+	switch runtime.GOARCH {
+	case archAMD64:
+		return engineImageAMD
+	case archARM64:
+		return engineImageARM
+	default:
+		return "" //let it error :)
+	}
 }
 
 func DockerImages(ctx context.Context, dockerd *Service) ([]string, error) {
