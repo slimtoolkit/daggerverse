@@ -7,18 +7,19 @@ import (
 	"strings"
 )
 
-type SlimWithDocker struct{}
+type Slim struct{}
 
-func (s *SlimWithDocker) Nop(ctx context.Context,
+func (s *Slim) Nop(ctx context.Context,
 	name string,
 	doit Optional[bool],
 ) (string, error) {
 	return fmt.Sprintf("nop(name=%s,doit=%v)", name, doit.GetOr(true)), nil
 }
 
-func (s *SlimWithDocker) Debug(ctx context.Context, container *Container) (*Container, error) {
-	slimmed, err := s.Slim(ctx,
+func (s *Slim) Debug(ctx context.Context, container *Container) (*Container, error) {
+	slimmed, err := s.Minify(ctx,
 		container,
+		OptEmpty[string](),
 		OptEmpty[bool](),
 		OptEmpty[string](),
 		OptEmpty[bool](),
@@ -26,6 +27,7 @@ func (s *SlimWithDocker) Debug(ctx context.Context, container *Container) (*Cont
 	if err != nil {
 		return nil, err
 	}
+	
 	debug := dag.
 		Container().
 		From("alpine").
@@ -50,6 +52,9 @@ const (
 	flagShowClogs = "--show-clogs"
 	flagHttpProbe = "--http-probe"
 	flagExecProbe = "--exec"
+
+	modeDocker = "docker"
+	modeNative = "native"
 )
 
 func engineImage() string {
@@ -63,17 +68,29 @@ func engineImage() string {
 	}
 }
 
-func (s *SlimWithDocker) Slim(
+func (s *Slim) Minify(
 	ctx context.Context,
 	container *Container,
+	mode Optional[string],
 	probeHTTP Optional[bool],
 	probeExec Optional[string],
 	showClogs Optional[bool],
 	slimDebug Optional[bool]) (*Container, error) {
+	paramMode := mode.GetOr(modeDocker)
 	paramProbeHTTP := probeHTTP.GetOr(true)
 	paramProbeExec := probeExec.GetOr("")
 	paramShowClogs := showClogs.GetOr(false)
 	paramDebug := slimDebug.GetOr(false)
+
+	switch paramMode {
+		case modeDocker, modeNative:
+		default:
+			paramMode = modeDocker
+	}
+
+	if paramMode != modeDocker {
+		return nil, fmt.Errorf("unsupported mode - %s", paramMode)
+	}
 
 	// Start an ephemeral dockerd
 	dockerd := dag.Dockerd().Service()
