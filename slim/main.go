@@ -17,30 +17,83 @@ const (
 	outputImageTag = "slim-output:latest"
 	outputImageTar = "output.tar"
 
-	flagDebug     = "--debug"
-	trueValue     = "true"
-	cmdBuild      = "build"
-	flagShowClogs = "--show-clogs"
-	flagHttpProbe = "--http-probe"
-	flagExecProbe = "--exec"
+	flagDebug = "--debug"
+	trueValue = "true"
+	cmdBuild  = "build"
 
 	modeDocker = "docker"
 	modeNative = "native"
+
+	flagShowClogs              = "--show-clogs"
+	flagHttpProbe              = "--http-probe"
+	flagHttpProbeCmd           = "--http-probe-cmd"
+	flagHttpProbePorts         = "--http-probe-ports"
+	flagHttpProbeExitOnFailure = "--http-probe-exit-on-failure"
+
+	flagPublishPort         = "--publish-port"
+	flagPublishExposedPorts = "--publish-exposed-ports"
+
+	flagExecProbe = "--exec"
+
+	flagIncludePath     = "--include-path"
+	flagIncludeBin      = "--include-bin"
+	flagIncludeExe      = "--include-exe"
+	flagIncludeShell    = "--include-shell"
+	flagIncludeNew      = "--include-new"
+	flagIncludeZoneInfo = "--include-zoneinfo"
+	flagPreservePath    = "--preserve-path"
+	flagExcludePattern  = "--exclude-pattern"
+	flagEnv             = "--env"
+	flagExpose          = "--expose"
+	flagContinueAfter   = "--continue-after"
+
+	flagSensorIPCMode     = "--sensor-ipc-mode"
+	flagSensorIPCEndpoint = "--sensor-ipc-endpoint"
+
+	flagRTASourcePT      = "--rta-source-ptrace"
+	flagImageBuildEngine = "--image-build-engine"
+	flagImageBuildArch   = "--image-build-arch"
 )
 
-type Slim struct{}
+type Slim struct {
+	includePaths      []string
+	includeBins       []string
+	includeExes       []string
+	includeShell      *bool
+	includeNew        *bool
+	includeZoneinfo   *bool
+	preservePaths     []string
+	excludePatterns   []string
+	envVars           []string
+	sensorIPCMode     string
+	sensorIPCEndpoint string
+	rtaSourcePT       *bool
+	imageBuildEngine  string
+	imageBuildArch    string
+	execProbes        []string
+	httpProbeCmds     []string
+	exposePorts       []string
+	publishPorts      []string
+}
 
 func (s *Slim) Minify(
 	ctx context.Context,
 	container *Container,
 	mode Optional[string],
-	probeHTTP Optional[bool],
-	probeExec Optional[string],
+	probeHttp Optional[bool],
+	probeHttpExitOnFailure Optional[bool],
+	publishExposedPorts Optional[bool],
+	probeHttpPorts Optional[string], //comma separated list
+	continueAfter Optional[string],
 	showClogs Optional[bool],
-	slimDebug Optional[bool]) (*Container, error) {
+	slimDebug Optional[bool],
+) (*Container, error) {
 	paramMode := mode.GetOr(modeDocker)
-	paramProbeHTTP := probeHTTP.GetOr(true)
-	paramProbeExec := probeExec.GetOr("")
+	paramProbeHttp := probeHttp.GetOr(true)
+	paramProbeHttpPorts := probeHttpPorts.GetOr("")
+	paramProbeHttpExitOnFailure := probeHttpExitOnFailure.GetOr(true)
+	paramPublishExposedPorts := publishExposedPorts.GetOr(true)
+	paramContinueAfter := continueAfter.GetOr("")
 	paramShowClogs := showClogs.GetOr(false)
 	paramDebug := slimDebug.GetOr(false)
 
@@ -87,12 +140,95 @@ func (s *Slim) Minify(
 		cargs = append(cargs, flagShowClogs)
 	}
 
-	if paramProbeHTTP {
-		cargs = append(cargs, flagHttpProbe)
+	//pick up 'false' values too
+	cargs = append(cargs, flagHttpProbe, fmt.Sprintf("%v", paramProbeHttp))
+	cargs = append(cargs, flagHttpProbeExitOnFailure, fmt.Sprintf("%v", paramProbeHttpExitOnFailure))
+	cargs = append(cargs, flagPublishExposedPorts, fmt.Sprintf("%v", paramPublishExposedPorts))
+
+	if paramProbeHttpPorts != "" {
+		cargs = append(cargs, flagHttpProbePorts, paramProbeHttpPorts)
 	}
 
-	if paramProbeExec != "" {
-		cargs = append(cargs, flagExecProbe, paramProbeExec)
+	for _, val := range s.exposePorts {
+		cargs = append(cargs, flagExpose, val)
+	}
+
+	for _, val := range s.publishPorts {
+		cargs = append(cargs, flagPublishPort, val)
+	}
+
+	for _, val := range s.httpProbeCmds {
+		cargs = append(cargs, flagHttpProbeCmd, val)
+	}
+
+	if len(s.execProbes) > 0 {
+		//todo: support multiple exec probes (using the first one for now)
+		cargs = append(cargs, flagExecProbe, s.execProbes[0])
+	}
+
+	for _, val := range s.includePaths {
+		cargs = append(cargs, flagIncludePath, val)
+	}
+
+	for _, val := range s.includeBins {
+		cargs = append(cargs, flagIncludeBin, val)
+	}
+
+	for _, val := range s.includeExes {
+		cargs = append(cargs, flagIncludeExe, val)
+	}
+
+	for _, val := range s.preservePaths {
+		cargs = append(cargs, flagPreservePath, val)
+	}
+
+	for _, val := range s.excludePatterns {
+		cargs = append(cargs, flagExcludePattern, val)
+	}
+
+	for _, val := range s.envVars {
+		cargs = append(cargs, flagEnv, val)
+	}
+
+	if paramContinueAfter != "" {
+		cargs = append(cargs, flagContinueAfter, paramContinueAfter)
+	}
+
+	if s.sensorIPCMode != "" {
+		cargs = append(cargs, flagSensorIPCMode, s.sensorIPCMode)
+	}
+
+	if s.sensorIPCEndpoint != "" {
+		cargs = append(cargs, flagSensorIPCEndpoint, s.sensorIPCEndpoint)
+	}
+
+	if s.imageBuildArch != "" {
+		cargs = append(cargs, flagImageBuildArch, s.imageBuildArch)
+	}
+
+	if s.imageBuildEngine != "" {
+		cargs = append(cargs, flagImageBuildEngine, s.imageBuildEngine)
+	}
+
+	if s.rtaSourcePT != nil {
+		cargs = append(cargs, flagRTASourcePT, fmt.Sprintf("%v", *s.rtaSourcePT))
+	}
+
+	if s.includeZoneinfo != nil {
+		cargs = append(cargs, flagIncludeZoneInfo, fmt.Sprintf("%v", *s.includeZoneinfo))
+	}
+
+	if s.includeNew != nil {
+		cargs = append(cargs, flagIncludeNew, fmt.Sprintf("%v", *s.includeNew))
+	}
+
+	if s.includeShell != nil {
+		cargs = append(cargs, flagIncludeShell, fmt.Sprintf("%v", *s.includeShell))
+	}
+
+	//reuse the param to show the constructed command line:
+	if paramDebug {
+		fmt.Printf("Slim(Toolkit) params: %#v\n", cargs)
 	}
 
 	// Setup the slim container, attached to the dockerd
@@ -119,14 +255,22 @@ func (s *Slim) Minify(
 	return dag.Container().Import(outputArchive), nil
 }
 
-func (s *Slim) Debug(ctx context.Context, container *Container) (*Container, error) {
+func (s *Slim) Debug(
+	ctx context.Context,
+	container *Container,
+	showClogs Optional[bool],
+	slimDebug Optional[bool],
+) (*Container, error) {
 	slimmed, err := s.Minify(ctx,
 		container,
-		OptEmpty[string](),
-		OptEmpty[bool](),
-		OptEmpty[string](),
-		OptEmpty[bool](),
-		OptEmpty[bool]())
+		OptEmpty[string](), //mode
+		OptEmpty[bool](),   //probeHTTP
+		OptEmpty[bool](),   //probeHTTPExitOnFailure
+		OptEmpty[bool](),   //publishExposedPorts
+		OptEmpty[string](), //probeHTTPPorts
+		OptEmpty[string](), //continueAfter
+		showClogs,
+		slimDebug)
 	if err != nil {
 		return nil, err
 	}
@@ -137,6 +281,98 @@ func (s *Slim) Debug(ctx context.Context, container *Container) (*Container, err
 		WithMountedDirectory("/slim", slimmed.Rootfs()).
 		WithMountedDirectory("/unslim", container.Rootfs())
 	return debug, nil
+}
+
+// MORE OPTIONAL PARAMS
+
+func (s *Slim) WithIncludePath(val string) *Slim {
+	s.includePaths = append(s.includePaths, val)
+	return s
+}
+
+func (s *Slim) WithIncludeBin(val string) *Slim {
+	s.includeBins = append(s.includeBins, val)
+	return s
+}
+
+func (s *Slim) WithIncludeExe(val string) *Slim {
+	s.includeExes = append(s.includeExes, val)
+	return s
+}
+
+func (s *Slim) WithIncludeShell(val bool) *Slim {
+	s.includeShell = &val
+	return s
+}
+
+func (s *Slim) WithIncludeNew(val bool) *Slim {
+	s.includeNew = &val
+	return s
+}
+
+func (s *Slim) WithIncludeZoneinfo(val bool) *Slim {
+	s.includeZoneinfo = &val
+	return s
+}
+
+func (s *Slim) WithPreservePath(val string) *Slim {
+	s.preservePaths = append(s.preservePaths, val)
+	return s
+}
+
+func (s *Slim) WithExcludePattern(val string) *Slim {
+	s.excludePatterns = append(s.excludePatterns, val)
+	return s
+}
+
+func (s *Slim) WithEnv(val string) *Slim {
+	s.envVars = append(s.envVars, val)
+	return s
+}
+
+func (s *Slim) WithSensorIpcMode(val string) *Slim {
+	s.sensorIPCMode = val
+	return s
+}
+
+func (s *Slim) WithSensorIpcEndpoint(val string) *Slim {
+	s.sensorIPCEndpoint = val
+	return s
+}
+
+func (s *Slim) WithSourcePtrace(val bool) *Slim {
+	s.rtaSourcePT = &val
+	return s
+}
+
+func (s *Slim) WithImageBuildEngine(val string) *Slim {
+	s.imageBuildEngine = val
+	return s
+}
+
+func (s *Slim) WithImageBuildArch(val string) *Slim {
+	s.imageBuildArch = val
+	return s
+}
+
+func (s *Slim) WithExecProbe(val string) *Slim {
+	s.execProbes = append(s.execProbes, val)
+	return s
+}
+
+func (s *Slim) WithHttpProbeCmd(val string) *Slim {
+	s.httpProbeCmds = append(s.httpProbeCmds, val)
+	return s
+}
+
+func (s *Slim) WithExposePort(val string) *Slim {
+	s.exposePorts = append(s.exposePorts, val)
+	return s
+}
+
+func (s *Slim) WithPublishPort(val string) *Slim {
+	s.publishPorts = append(s.publishPorts, val)
+	return s
 }
 
 // SUPPORTING FUNCTIONS:
