@@ -255,7 +255,7 @@ func (s *Slim) Minify(
 	return dag.Container().Import(outputArchive), nil
 }
 
-func (s *Slim) Debug(
+func (s *Slim) Compare(
 	ctx context.Context,
 	container *Container,
 	showClogs Optional[bool],
@@ -278,8 +278,8 @@ func (s *Slim) Debug(
 	debug := dag.
 		Container().
 		From("alpine").
-		WithMountedDirectory("/slim", slimmed.Rootfs()).
-		WithMountedDirectory("/unslim", container.Rootfs())
+		WithMountedDirectory("/image.before", slimmed.Rootfs()).
+		WithMountedDirectory("/image.after", container.Rootfs())
 	return debug, nil
 }
 

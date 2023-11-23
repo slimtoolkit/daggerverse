@@ -8,7 +8,7 @@ This is a fork of the original code from https://github.com/shykes/daggerverse/t
 
 * `minify` - minify the target image producing a slim version of the image as its output (see the `build` SlimToolkit command for more details).
 
-* `debug` - minify the target image and then create a temporary container with the original and minified images mounted to inspect the changes.
+* `compare` - minify the target image and then create a temporary container with the original and minified images mounted to inspect the changes.
 
 
 ## `minify` Function/Command Flags
